@@ -2,6 +2,7 @@
 
 from collections import OrderedDict
 from math import ceil
+from typing import Optional, Tuple
 from uuid import uuid4
 
 import dask
@@ -23,6 +24,10 @@ from libgdf_cffi import libgdf
 from toolz import partition_all
 
 import cudf
+from cudf.utils import utils as cudf_utils
+from cudf.utils import queryutils as cudf_utils_queryutils
+
+import dask_cudf
 from dask_cudf import batcher_sortnet, join_impl
 from dask_cudf.accessor import CachedAccessor, CategoricalAccessor, DatetimeAccessor
 from dask_cudf.utils import make_meta
@@ -187,7 +192,7 @@ normalize_token.register(_Frame, lambda a: a._name)
 
 
 def query(df, expr, callenv):
-    boolmask = cudf.utils.queryutils.query_execute(df, expr, callenv)
+    boolmask = cudf_utils_queryutils.query_execute(df, expr, callenv)
 
     selected = cudf.Series(boolmask)
     newdf = cudf.DataFrame()
@@ -244,10 +249,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
         callenv = {"locals": {}, "globals": {}}
         return self.map_partitions(query, expr, callenv, meta=self._meta)
 
-    def merge(self, other, on=None, how="left", lsuffix="_x", rsuffix="_y"):
+    def merge(self, other, on: Optional[Tuple[str]] = None,
+              how: str = "left", lsuffix: str ="_x", rsuffix="_y"):
         """Merging two dataframes on the column(s) indicated in *on*.
         """
-        assert how == "left", "left join is impelemented"
+        assert how in ("left", "inner", "right", "outer")
         if on is None:
             return self.join(other, how=how, lsuffix=lsuffix, rsuffix=rsuffix)
         else:
@@ -256,7 +262,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             )
 
     def join(self, other, how="left", lsuffix="", rsuffix=""):
-        """Join two datatframes
+        """Join two dataframes
 
         *on* is not supported.
         """
@@ -314,10 +320,10 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
             for k, dtype in rhs_dtypes:
                 data = np.zeros(len(lhs), dtype=dtype)
-                mask_size = cudf.utils.calc_chunk_size(
-                    data.size, cudf.utils.mask_bitsize
+                mask_size = cudf_utils.calc_chunk_size(
+                    data.size, cudf_utils.mask_bitsize
                 )
-                mask = np.zeros(mask_size, dtype=cudf.utils.mask_dtype)
+                mask = np.zeros(mask_size, dtype=cudf_utils.mask_dtype)
                 sr = cudf.Series.from_masked_array(
                     data=data, mask=mask, null_count=data.size
                 )

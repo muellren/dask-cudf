@@ -1,11 +1,11 @@
 from functools import partial
+from typing import Tuple
 
 import numpy as np
 from dask import delayed
 
 import cudf
 from dask_cudf import core
-
 
 @delayed
 def local_shuffle(frame, num_new_parts, key_columns):
@@ -37,7 +37,7 @@ def fanout_subgroups(grouped_parts, num_new_parts):
     ]
 
 
-def join_frames(left, right, on, how, lsuffix, rsuffix):
+def join_frames(left, right, on: Tuple[str], how: str, lsuffix: str, rsuffix: str):
     """Join two frames on 1 or more columns.
 
     Parameters
@@ -50,7 +50,7 @@ def join_frames(left, right, on, how, lsuffix, rsuffix):
     lsuffix, rsuffix : str
 
     """
-    assert how == "left"
+    assert how in ("left", "inner", "right", "outer")
 
     def fix_left(df):
         newdf = cudf.DataFrame()
@@ -93,8 +93,11 @@ def join_frames(left, right, on, how, lsuffix, rsuffix):
             return left.merge(right, on=on, how=how, lsuffix=lsuffix, rsuffix=rsuffix)
 
     left_val_names = [k for k in left.columns if k not in on]
+    print(f"left_val_names: {left_val_names}")
     right_val_names = [k for k in right.columns if k not in on]
+    print(f"right_val_names: {left_val_names}")
     same_names = set(left_val_names) & set(right_val_names)
+    print(f"same_names: {same_names}")
     fix_name = partial(_fix_name, same_names=same_names)
     if same_names and not (lsuffix or rsuffix):
         raise ValueError(
